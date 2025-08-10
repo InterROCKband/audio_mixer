@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Track Player</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 10px;
+    background: #111;
+    color: #fff;
+  }
+  select, button, input[type=range] {
+    width: 100%;
+    margin: 5px 0;
+  }
+  .track {
+    background: #222;
+    padding: 8px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+  }
+  .track-controls {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+  }
+  .track-controls button {
+    flex: 1;
+    padding: 8px;
+  }
+  .global-controls {
+    display: flex;
+    gap: 5px;
+    margin-top: 10px;
+  }
+  .global-controls button {
+    flex: 1;
+    padding: 10px;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+
+<h2>🎵 Mixer Multifaixa</h2>
+
+<select id="songSelector"></select>
+
+<div id="tracksContainer"></div>
+
+<div>
+  <label for="seekSlider">⏩ Progresso</label>
+  <input type="range" id="seekSlider" min="0" max="100" value="0">
+</div>
+
+<div class="global-controls">
+  <button id="playBtn">▶ Play</button>
+  <button id="pauseBtn">⏸ Pause</button>
+  <button id="stopBtn">⏹ Stop</button>
+</div>
+
+<script>
+const songs = {
+  "Jet - Are you gonna be my girl": [
+    { name: "Vocais", file: "tracks/AYGBMG/VOCALS.mp3" },
+    { name: "Baixo", file: "tracks/AYGBMG/BASS.mp3" },
+    { name: "Bateria", file: "tracks/AYGBMG/DRUMS.mp3" },
+    { name: "Guitarra Solo", file: "tracks/AYGBMG/LEAD_GUITAR.mp3" },
+    { name: "Guitarra Base", file: "tracks/AYGBMG/RHYTHM_GUITAR.mp3" }
+  ],
+  "Jet - Cold Hard Bitch": [
+    { name: "Vocais", file: "tracks/CHB/VOCALS.mp3" },
+    { name: "Baixo", file: "tracks/CHB/BASS.mp3" },
+    { name: "Bateria", file: "tracks/CHB/DRUMS.mp3" },
+    { name: "Guitarra Solo", file: "tracks/CHB/GUITAR_LEAD.mp3" },
+    { name: "Guitarra Base", file: "tracks/CHB/GUITAR_RHYTHM.mp3" },
+    { name: "Metronomo", file: "tracks/CHB/METR.mp3" }
+  ]
+};
+
+let currentTracks = [];
+let soloMode = null;
+let seekTimer;
+
+const songSelector = document.getElementById('songSelector');
+const tracksContainer = document.getElementById('tracksContainer');
+const seekSlider = document.getElementById('seekSlider');
+
+Object.keys(songs).forEach(title => {
+  const opt = document.createElement('option');
+  opt.value = title;
+  opt.textContent = title;
+  songSelector.appendChild(opt);
+});
+
+songSelector.addEventListener('change', loadSong);
+
+function loadSong() {
+  stopAll();
+  tracksContainer.innerHTML = '';
+  currentTracks = songs[songSelector.value].map(trackInfo => {
+    const audio = new Audio(trackInfo.file);
+    audio.preload = 'auto';
+    audio.volume = 1.0;
+
+    const trackDiv = document.createElement('div');
+    trackDiv.className = 'track';
+    trackDiv.innerHTML = `<strong>${trackInfo.name}</strong>`;
+
+    const volSlider = document.createElement('input');
+    volSlider.type = 'range';
+    volSlider.min = 0;
+    volSlider.max = 1;
+    volSlider.step = 0.01;
+    volSlider.value = 1;
+    volSlider.oninput = () => audio.volume = volSlider.value;
+
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'track-controls';
+
+    const muteBtn = document.createElement('button');
+    muteBtn.textContent = 'Mute';
+    muteBtn.onclick = () => {
+      audio.muted = !audio.muted;
+      muteBtn.style.background = audio.muted ? '#a00' : '';
+    };
+
+    const soloBtn = document.createElement('button');
+    soloBtn.textContent = 'Solo';
+    soloBtn.onclick = () => {
+      if (soloMode === audio) {
+        soloMode = null;
+        currentTracks.forEach(t => t.audio.muted = false);
+        soloBtn.style.background = '';
+      } else {
+        soloMode = audio;
+        currentTracks.forEach(t => t.audio.muted = t.audio !== audio);
+        soloBtn.style.background = '#0a0';
+      }
+    };
+
+    controlsDiv.appendChild(muteBtn);
+    controlsDiv.appendChild(soloBtn);
+
+    trackDiv.appendChild(volSlider);
+    trackDiv.appendChild(controlsDiv);
+
+    tracksContainer.appendChild(trackDiv);
+
+    return { audio, volSlider };
+  });
+}
+
+function playAll() {
+  currentTracks.forEach(t => { t.audio.play(); });
+  updateSeek();
+}
+
+function pauseAll() {
+  currentTracks.forEach(t => t.audio.pause());
+}
+
+function stopAll() {
+  currentTracks.forEach(t => {
+    t.audio.pause();
+    t.audio.currentTime = 0;
+  });
+  seekSlider.value = 0;
+}
+
+function updateSeek() {
+  clearInterval(seekTimer);
+  seekTimer = setInterval(() => {
+    if (currentTracks.length > 0) {
+      const progress = (currentTracks[0].audio.currentTime / currentTracks[0].audio.duration) * 100;
+      seekSlider.value = progress || 0;
+    }
+  }, 500);
+}
+
+seekSlider.addEventListener('input', () => {
+  if (currentTracks.length > 0) {
+    const time = (seekSlider.value / 100) * currentTracks[0].audio.duration;
+    currentTracks.forEach(t => t.audio.currentTime = time);
+  }
+});
+
+document.getElementById('playBtn').onclick = playAll;
+document.getElementById('pauseBtn').onclick = pauseAll;
+document.getElementById('stopBtn').onclick = stopAll;
+
+loadSong(); // Carrega a primeira música por padrão
+</script>
+
+</body>
+</html>
